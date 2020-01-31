@@ -4,6 +4,7 @@ using Newtonsoft.Json;
 using Oxide.Core;
 using Oxide.Plugins.SignArtistClasses;
 using System;
+using System.Text;
 using System.Collections;
 using System.Collections.Generic;
 using System.Drawing;
@@ -14,7 +15,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Sign Artist", "Mughisi", "1.1.2", ResourceId = 992)]
+    [Info("Sign Artist", "Mughisi", "1.1.3", ResourceId = 992)]
     [Description("Allows players with the appropriate permission to import images from the internet on paintable objects")]
 
     /*********************************************************************************
@@ -894,7 +895,7 @@ namespace Oxide.Plugins
             }
 
             // Combine all the values into the url;
-            string url = $"http://placeholdit.imgix.net/~text?fm={format}&txtsize={fontsize}&txt={message}&w={size.ImageWidth}&h={size.ImageHeight}&txtclr={color}&bg={bgcolor}";
+            string url = $"http://assets.imgix.net/~text?fm={format}&txtalign=middle,center&txtsize={fontsize}&txt={message}&w={size.ImageWidth}&h={size.ImageHeight}&txtclr={color}&bg={bgcolor}";
 
             // Notify the player that it is added to the queue.
             SendMessage(player, "DownloadQueued");
@@ -1105,7 +1106,7 @@ namespace Oxide.Plugins
             // Get the object that is in front of the player within the maximum distance set in the config.
             if (Physics.Raycast(player.eyes.HeadRay(), out hit, Settings.MaxDistance))
             {
-                // Attempt to grab the Signage entity, if there is none this will set the sign to null, 
+                // Attempt to grab the Signage entity, if there is none this will set the sign to null,
                 // otherwise this will set it to the sign the player is looking at.
                 sign = hit.GetEntity() as Signage;
             }
