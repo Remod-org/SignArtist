@@ -12,10 +12,11 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using UnityEngine;
+using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("Sign Artist", "Mughisi", "1.1.3", ResourceId = 992)]
+    [Info("Sign Artist", "Mughisi", "1.1.4", ResourceId = 992)]
     [Description("Allows players with the appropriate permission to import images from the internet on paintable objects")]
 
     /*********************************************************************************
@@ -26,13 +27,9 @@ namespace Oxide.Plugins
     internal class SignArtist : RustPlugin
     {
         private Dictionary<ulong, float> cooldowns = new Dictionary<ulong, float>();
-
         private GameObject imageDownloaderGameObject;
-
         private ImageDownloader imageDownloader;
-
         public SignArtistConfig Settings { get; private set; }
-
         public Dictionary<string, ImageSize> ImageSizePerAsset { get; private set; }
 
         /// <summary>
@@ -120,11 +117,8 @@ namespace Oxide.Plugins
         private class DownloadRequest
         {
             public BasePlayer Sender { get; }
-
             public Signage Sign { get; }
-
             public string Url { get; }
-
             public bool Raw { get; }
 
             /// <summary>
@@ -149,9 +143,7 @@ namespace Oxide.Plugins
         private class RestoreRequest
         {
             public BasePlayer Sender { get; }
-
             public Signage Sign { get; }
-
             public bool Raw { get; }
 
             /// <summary>
@@ -174,11 +166,8 @@ namespace Oxide.Plugins
         public class ImageSize
         {
             public int Width { get; }
-
             public int Height { get; }
-
             public int ImageWidth { get; }
-
             public int ImageHeight { get; }
 
             /// <summary>
@@ -212,13 +201,9 @@ namespace Oxide.Plugins
         private class ImageDownloader : MonoBehaviour
         {
             private byte activeDownloads;
-
             private byte activeRestores;
-
             private readonly SignArtist signArtist = (SignArtist)Interface.Oxide.RootPluginManager.GetPlugin(nameof(SignArtist));
-
             private readonly Queue<DownloadRequest> downloadQueue = new Queue<DownloadRequest>();
-
             private readonly Queue<RestoreRequest> restoreQueue = new Queue<RestoreRequest>();
 
             /// <summary>
@@ -556,6 +541,10 @@ namespace Oxide.Plugins
             permission.RegisterPermission("signartist.text", this);
             permission.RegisterPermission("signartist.url", this);
 
+            AddCovalenceCommand("sil", "SilCommand");
+            AddCovalenceCommand("silt", "SiltCommand");
+            AddCovalenceCommand("silrestore", "RestoreCommand");
+
             // Initialize the dictionary with all paintable object assets and their target sizes
             ImageSizePerAsset = new Dictionary<string, ImageSize>()
             {
@@ -682,14 +671,15 @@ namespace Oxide.Plugins
         }
 
         /// <summary>
-        /// Handles the /sil chat command.
+        /// Handles the /sil command.
         /// </summary>
-        /// <param name="player">The player that has executed the command. </param>
+        /// <param name="iplayer">The player that has executed the command. </param>
         /// <param name="command">The name of the command that was executed. </param>
         /// <param name="args">All arguments that were passed with the command. </param>
-        [ChatCommand("sil")]
-        private void SilChatCommand(BasePlayer player, string command, string[] args)
+        [Command("sil"), Permission("signartist.url")]
+        private void SilCommand(IPlayer iplayer, string command, string[] args)
         {
+            var player = iplayer.Object as BasePlayer;
             // Verify if the correct syntax is used.
             if (args.Length < 1)
             {
@@ -765,32 +755,15 @@ namespace Oxide.Plugins
         }
 
         /// <summary>
-        /// Handles the sil console command
+        /// Handles the /silt command
         /// </summary>
-        /// <param name="arg"><see cref="ConsoleSystem.Arg"/> running the command. </param>
-        [ConsoleCommand("sil")]
-        private void SilConsoleCommand(ConsoleSystem.Arg arg)
-        {
-            // Verify that the command was run from an ingame console.
-            if (arg.Player() == null)
-            {
-                // It wasn't run from an ingame console, do nothing.
-                return;
-            }
-
-            // Manually trigger the chat command with the console command args.
-            SilChatCommand(arg.Player(), "sil", arg.Args ?? new string[0]);
-        }
-
-        /// <summary>
-        /// Handles the /silt chat command
-        /// </summary>
-        /// <param name="player">The player that has executed the command. </param>
+        /// <param name="iplayer">The player that has executed the command. </param>
         /// <param name="command">The name of the command that was executed. </param>
         /// <param name="args">All arguments that were passed with the command. </param>
-        [ChatCommand("silt")]
-        private void SiltChatCommand(BasePlayer player, string command, string[] args)
+        [Command("silt"), Permission("signartist.text")]
+        private void SiltCommand(IPlayer iplayer, string command, string[] args)
         {
+            var player = iplayer.Object as BasePlayer;
             // Verify if the correct syntax is used.
             if (args.Length < 1)
             {
@@ -908,26 +881,15 @@ namespace Oxide.Plugins
         }
 
         /// <summary>
-        /// Handles the sil console command
+        /// Handles the /silrestore command
         /// </summary>
-        /// <param name="arg"><see cref="ConsoleSystem.Arg"/> running the command. </param>
-        [ConsoleCommand("silt")]
-        private void SiltConsoleCommand(ConsoleSystem.Arg arg)
+        /// <param name="iplayer">The player that has executed the command. </param>
+        /// <param name="command">The name of the command that was executed. </param>
+        /// <param name="args">All arguments that were passed with the command. </param>
+        [Command("silrestore"), Permission("signartist.raw")]
+        private void RestoreCommand(IPlayer iplayer, string command, string[] args)
         {
-            // Verify that the command was run from an ingame console.
-            if (arg.Player() == null)
-            {
-                // It wasn't run from an ingame console, do nothing.
-                return;
-            }
-
-            // Manually trigger the chat command with the console command args.
-            SiltChatCommand(arg.Player(), "silt", arg.Args ?? new string[0]);
-        }
-
-        [ChatCommand("silrestore")]
-        private void RestoreCommand(BasePlayer player, string command, string[] args)
-        {
+            var player = iplayer.Object as BasePlayer;
             // Verify if the player has permission to use this command.
             if (!HasPermission(player, "signartist.restore"))
             {
@@ -1104,6 +1066,7 @@ namespace Oxide.Plugins
             sign = null;
 
             // Get the object that is in front of the player within the maximum distance set in the config.
+            //if (Physics.Raycast(player.eyes.HeadRay(), out hit))//, Settings.MaxDistance))
             if (Physics.Raycast(player.eyes.HeadRay(), out hit, Settings.MaxDistance))
             {
                 // Attempt to grab the Signage entity, if there is none this will set the sign to null,
