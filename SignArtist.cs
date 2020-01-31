@@ -16,7 +16,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("Sign Artist", "Mughisi", "1.1.4", ResourceId = 992)]
+    [Info("Sign Artist", "Mughisi", "1.1.6", ResourceId = 992)]
     [Description("Allows players with the appropriate permission to import images from the internet on paintable objects")]
 
     /*********************************************************************************
@@ -750,6 +750,9 @@ namespace Oxide.Plugins
             // Queue the download of the specified image.
             imageDownloader.QueueDownload(args[0], player, sign, raw);
 
+            // Call external hook
+            Interface.Oxide.CallHook("OnImagePost", player, args[0]);
+
             // Set the cooldown on the command for the player if the cooldown setting is enabled.
             SetCooldown(player);
         }
@@ -876,6 +879,9 @@ namespace Oxide.Plugins
             // Queue the download of the specified image.
             imageDownloader.QueueDownload(url, player, sign, raw);
 
+            // Call external hook
+            Interface.Oxide.CallHook("OnImagePost", player, url);
+
             // Set the cooldown on the command for the player if the cooldown setting is enabled.
             SetCooldown(player);
         }
@@ -986,7 +992,7 @@ namespace Oxide.Plugins
         /// <param name="player">The player to obtain the cooldown of. </param>
         private float GetCooldown(BasePlayer player)
         {
-            return Time.realtimeSinceStartup - cooldowns[player.userID];
+            return Settings.Cooldown - (Time.realtimeSinceStartup - cooldowns[player.userID]);
         }
 
         /// <summary>
