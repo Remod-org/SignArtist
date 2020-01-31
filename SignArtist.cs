@@ -1,5 +1,4 @@
 // Reference: System.Drawing
-
 using Newtonsoft.Json;
 using Oxide.Core;
 using Oxide.Plugins.SignArtistClasses;
@@ -13,10 +12,11 @@ using System.IO;
 using System.Linq;
 using UnityEngine;
 using Oxide.Core.Libraries.Covalence;
+using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Sign Artist", "Mughisi", "1.1.6", ResourceId = 992)]
+    [Info("Sign Artist", "RFC1920", "1.1.8", ResourceId = 992)]
     [Description("Allows players with the appropriate permission to import images from the internet on paintable objects")]
 
     /*********************************************************************************
@@ -120,6 +120,7 @@ namespace Oxide.Plugins
             public Signage Sign { get; }
             public string Url { get; }
             public bool Raw { get; }
+            public bool Hor { get; }
 
             /// <summary>
             /// Initializes a new instance of the <see cref="DownloadRequest" /> class.
@@ -128,12 +129,13 @@ namespace Oxide.Plugins
             /// <param name="player">The player that requested the download. </param>
             /// <param name="sign">The sign to add the image to. </param>
             /// <param name="raw">Should the image be stored with or without conversion to jpeg. </param>
-            public DownloadRequest(string url, BasePlayer player, Signage sign, bool raw)
+            public DownloadRequest(string url, BasePlayer player, Signage sign, bool raw, bool hor)
             {
                 Url = url;
                 Sender = player;
                 Sign = sign;
                 Raw = raw;
+                Hor = hor;
             }
         }
 
@@ -213,7 +215,7 @@ namespace Oxide.Plugins
             /// <param name="player">The player that requested the download. </param>
             /// <param name="sign">The sign to add the image to. </param>
             /// <param name="raw">Should the image be stored with or without conversion to jpeg. </param>
-            public void QueueDownload(string url, BasePlayer player, Signage sign, bool raw)
+            public void QueueDownload(string url, BasePlayer player, Signage sign, bool raw, bool hor = false)
             {
                 // Check if there is already a request for this sign and show an error if there is.
                 bool existingRequest = downloadQueue.Any(request => request.Sign == sign) || restoreQueue.Any(request => request.Sign == sign);
@@ -225,7 +227,7 @@ namespace Oxide.Plugins
                 }
 
                 // Instantiate a new DownloadRequest and add it to the queue.
-                downloadQueue.Enqueue(new DownloadRequest(url, player, sign, raw));
+                downloadQueue.Enqueue(new DownloadRequest(url, player, sign, raw, hor));
 
                 // Attempt to start the next download.
                 StartNextDownload();
@@ -350,7 +352,7 @@ namespace Oxide.Plugins
                         yield break;
                     }
 
-                    // Get the bytes array for the image from the webrequest and lookup the target image size for the targetted sign.
+                    // Get the bytes array for the image from the webrequest and lookup the target image size for the targeted sign.
                     byte[] imageBytes;
 
                     if (request.Raw)
@@ -364,7 +366,7 @@ namespace Oxide.Plugins
 
                     ImageSize size = GetImageSizeFor(request.Sign);
 
-                    // Verify that we have image size data for the targetted sign.
+                    // Verify that we have image size data for the targeted sign.
                     if (size == null)
                     {
                         // No data was found, show a message to the player and print a detailed message to the server console and attempt to start the next download.
@@ -375,8 +377,21 @@ namespace Oxide.Plugins
                         yield break;
                     }
 
-                    // Get the bytes array for the resized image for the targetted sign.
+                    // Get the bytes array for the resized image for the targeted sign.
                     byte[] resizedImageBytes = imageBytes.ResizeImage(size.Width, size.Height, size.ImageWidth, size.ImageHeight, signArtist.Settings.EnforceJpeg && !request.Raw);
+                    // Flip the image horizontally if needed (sign.hanging only)
+                    if(request.Hor)
+                    {
+                        var ms = new MemoryStream(resizedImageBytes);
+                        var mo = new MemoryStream();
+                        var img = Image.FromStream(ms);
+                        img.RotateFlip(RotateFlipType.RotateNoneFlipX);
+                        img.Save(mo,img.RawFormat);
+                        resizedImageBytes = mo.ToArray();
+                        mo = null;
+                        ms = null;
+                        img = null;
+                    }
 
                     // Verify that the resized file doesn't exceed the maximum configured filesize.
                     if (resizedImageBytes.Length > signArtist.Settings.MaxFileSizeInBytes)
@@ -457,7 +472,7 @@ namespace Oxide.Plugins
                 imageBytes = FileStorage.server.Get(request.Sign.textureID, FileStorage.Type.png, request.Sign.net.ID);
                 ImageSize size = GetImageSizeFor(request.Sign);
 
-                // Verify that we have image size data for the targetted sign.
+                // Verify that we have image size data for the targeted sign.
                 if (size == null)
                 {
                     // No data was found, show a message to the player and print a detailed message to the server console and attempt to start the next download.
@@ -471,7 +486,7 @@ namespace Oxide.Plugins
                 // Remove the texture from the FileStorage.
                 FileStorage.server.Remove(request.Sign.textureID, FileStorage.Type.png, request.Sign.net.ID);
 
-                // Get the bytes array for the resized image for the targetted sign.
+                // Get the bytes array for the resized image for the targeted sign.
                 byte[] resizedImageBytes = imageBytes.ResizeImage(size.Width, size.Height, size.ImageWidth, size.ImageHeight, signArtist.Settings.EnforceJpeg && !request.Raw);
 
                 // Create the image on the filestorage and send out a network update for the sign.
@@ -744,11 +759,14 @@ namespace Oxide.Plugins
                 raw = false;
             }
 
+            // This sign pastes in reverse, so we'll check and set a var to flip it
+            bool hor =  sign.LookupPrefab().name == "sign.hanging" ? true : false;
+
             // Notify the player that it is added to the queue.
             SendMessage(player, "DownloadQueued");
 
             // Queue the download of the specified image.
-            imageDownloader.QueueDownload(args[0], player, sign, raw);
+            imageDownloader.QueueDownload(args[0], player, sign, raw, hor);
 
             // Call external hook
             Interface.Oxide.CallHook("OnImagePost", player, args[0]);
@@ -860,7 +878,7 @@ namespace Oxide.Plugins
                 size = ImageSizePerAsset[sign.PrefabName];
             }
 
-            // Verify that we have image size data for the targetted sign.
+            // Verify that we have image size data for the targeted sign.
             if (size == null)
             {
                 // No data was found, show a message to the player and print a detailed message to the server console and attempt to start the next download.
@@ -876,14 +894,34 @@ namespace Oxide.Plugins
             // Notify the player that it is added to the queue.
             SendMessage(player, "DownloadQueued");
 
+            // This sign pastes in reverse, so we'll check and set a var to flip it
+            bool hor =  sign.LookupPrefab().name == "sign.hanging" ? true : false;
+
             // Queue the download of the specified image.
-            imageDownloader.QueueDownload(url, player, sign, raw);
+            imageDownloader.QueueDownload(url, player, sign, raw, hor);
 
             // Call external hook
             Interface.Oxide.CallHook("OnImagePost", player, url);
 
             // Set the cooldown on the command for the player if the cooldown setting is enabled.
             SetCooldown(player);
+        }
+
+        // This can be Call(ed) by other plugins to put text on a sign
+        void signText(BasePlayer player, Signage sign, string message, int fontsize=30, string color="FFFFFF", string bgcolor="000000")
+        {
+            //Puts($"signText called with {message}");
+            string format = "png32";
+
+            ImageSize size = null;
+            if (ImageSizePerAsset.ContainsKey(sign.PrefabName))
+            {
+                size = ImageSizePerAsset[sign.PrefabName];
+            }
+
+            // Combine all the values into the url;
+            string url = $"http://assets.imgix.net/~text?fm={format}&txtalign=middle,center&txtsize={fontsize}&txt={message}&w={size.ImageWidth}&h={size.ImageHeight}&txtclr={color}&bg={bgcolor}";
+            imageDownloader.QueueDownload(url, player, sign, false);
         }
 
         /// <summary>
