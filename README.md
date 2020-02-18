@@ -1,3 +1,7 @@
+# SignArtist (Remod version)
+
+[Download](https://code.remod.org/SignArtist.cs)
+
 Note: The code that handles the resizing requires gdiplus.dll. This should be present on Windows machines. But, on Linux, you will most likely have to install the package libgdiplus. Because this library depends on mono you will also have to add the mono repository to your system. Please refer to the FAQ to see how to do this.
 
 This plugin allows players with the appropriate permission to use images from the internet to display on signs.
