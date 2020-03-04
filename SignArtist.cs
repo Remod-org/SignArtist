@@ -222,7 +222,6 @@ namespace Oxide.Plugins
                 if (existingRequest)
                 {
                     signArtist.SendMessage(player, "ActionQueuedAlready");
-
                     return;
                 }
 
@@ -246,7 +245,6 @@ namespace Oxide.Plugins
                 if (existingRequest)
                 {
                     signArtist.SendMessage(player, "ActionQueuedAlready");
-
                     return;
                 }
 
@@ -684,6 +682,47 @@ namespace Oxide.Plugins
             imageDownloader = null;
             cooldowns = null;
         }
+        /// <summary>
+        /// API call for plugin when the Signage entity is known.
+        /// It doesn't check for cooldowns, permissions etc.
+        /// </summary>
+        /// <param name="sign">Sign entity in question</param>
+        /// <param name="url">URL of the image</param>
+        /// <param name="raw">whether the image should be downloaded as a raw file</param>
+        void Sil(Signage sign, string url, bool raw = false)
+        {
+            //just like in the SilCommand, check for flipping
+            bool hor = IsSignHorizontal(sign);
+
+            imageDownloader.QueueDownload(url, null, sign, raw, hor);
+
+            // Call external hook
+            Interface.Oxide.CallHook("OnImagePost", null, url);
+        }
+        /// <summary>
+        /// API call for a plugin to determine the sign the player is looking at
+        /// </summary>
+        /// <param name="player">The player that is, presumably, looking at a sign</param>
+        /// <returns>Returns null if the player is not looking at a sign, otherwise the sign in question</returns>
+        object GetSignLookedAt(BasePlayer player)
+        {
+            Signage sign;
+            if (!IsLookingAtSign(player, out sign))
+            {
+                return null;
+            }
+            else
+                return sign;
+        }
+        /// <summary>
+        /// Checks if the sign is of a particular hanging type
+        /// </summary>
+        /// <param name="sign">The sign in question</param>
+        /// <returns>Returns true if the sign is horizontal (and thus, needs flipping)</returns>
+        private bool IsSignHorizontal(Signage sign)
+        {
+            return sign.LookupPrefab().name == "sign.hanging" ? true : false;
+        }
 
         /// <summary>
         /// Handles the /sil command.
@@ -760,7 +799,7 @@ namespace Oxide.Plugins
             }
 
             // This sign pastes in reverse, so we'll check and set a var to flip it
-            bool hor =  sign.LookupPrefab().name == "sign.hanging" ? true : false;
+            bool hor =  IsSignHorizontal(sign);
 
             // Notify the player that it is added to the queue.
             SendMessage(player, "DownloadQueued");
@@ -1151,7 +1190,9 @@ namespace Oxide.Plugins
         /// <param name="args">Any amount of arguments to add to the message. </param>
         private void SendMessage(BasePlayer player, string key, params object[] args)
         {
-            player.ChatMessage(string.Format(GetTranslation(key, player), args));
+            if (player != null)
+                if (player.IsConnected)
+                    player.ChatMessage(string.Format(GetTranslation(key, player), args));
         }
 
         /// <summary>
