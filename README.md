@@ -58,6 +58,32 @@ Load from URL/sil https://assets.umod.org/images/umod-gray-nomargin.png
 
 Load from local file/sil file:///C:/Windows/test.png/sil file:///c:\img\test.png (might work better). On Windows, be sure to work in a directory that's not restricted for some reason, e.g. C:\Windows.
 
+# For Developers
+
+```csharp
+    private void signText(BasePlayer player, Signage sign, string message, int fontsize=30, string color="FFFFFF", string bgcolor="000000")
+```
+
+```csharp
+    private void Silt(Signage sign, string message, int fontsize=30, string color="FFFFFF", string bgcolor="000000")
+```
+
+```csharp
+    private void signImage(BasePlayer player, Signage sign, string url, bool raw = false)
+```
+
+```csharp
+    private void Sil(Signage sign, string url, bool raw = false)
+```
+
+```csharp
+    private object GetSignLookedAt(BasePlayer player)
+```
+
+```csharp
+    private bool IsSignHorizontal(Signage sign)
+```
+
 # Credits
 
     Nogrod, the original author of this plugin

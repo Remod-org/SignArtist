@@ -16,7 +16,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Sign Artist", "RFC1920", "1.1.8", ResourceId = 992)]
+    [Info("Sign Artist", "RFC1920", "1.1.9", ResourceId = 992)]
     [Description("Allows players with the appropriate permission to import images from the internet on paintable objects")]
 
     /*********************************************************************************
@@ -85,7 +85,8 @@ namespace Oxide.Plugins
             {
                 get
                 {
-                    return MaxSize * 1024 * 1024;
+                    //return MaxSize * 1024 * 1024;
+                    return MaxSize * 1024 * 1000;
                 }
             }
 
@@ -332,7 +333,7 @@ namespace Oxide.Plugins
                         throw new NullReferenceException("signArtist");
                     }
 
-                    // Verify that the webrequest was succesful.
+                    // Verify that the webrequest was successful.
                     if (www.error != null)
                     {
                         // The webrequest wasn't succesful, show a message to the player and attempt to start the next download.
@@ -759,8 +760,8 @@ namespace Oxide.Plugins
                 raw = false;
             }
 
-            // This sign pastes in reverse, so we'll check and set a var to flip it
-            bool hor =  sign.LookupPrefab().name == "sign.hanging" ? true : false;
+            // Some signs paste in reverse, so we'll check and set a var to flip it
+            bool hor = IsSignHorizontal(sign);
 
             // Notify the player that it is added to the queue.
             SendMessage(player, "DownloadQueued");
@@ -894,8 +895,8 @@ namespace Oxide.Plugins
             // Notify the player that it is added to the queue.
             SendMessage(player, "DownloadQueued");
 
-            // This sign pastes in reverse, so we'll check and set a var to flip it
-            bool hor =  sign.LookupPrefab().name == "sign.hanging" ? true : false;
+            // Some signs paste in reverse, so we'll check and set a var to flip it
+            bool hor = IsSignHorizontal(sign);
 
             // Queue the download of the specified image.
             imageDownloader.QueueDownload(url, player, sign, raw, hor);
@@ -905,23 +906,6 @@ namespace Oxide.Plugins
 
             // Set the cooldown on the command for the player if the cooldown setting is enabled.
             SetCooldown(player);
-        }
-
-        // This can be Call(ed) by other plugins to put text on a sign
-        void signText(BasePlayer player, Signage sign, string message, int fontsize=30, string color="FFFFFF", string bgcolor="000000")
-        {
-            //Puts($"signText called with {message}");
-            string format = "png32";
-
-            ImageSize size = null;
-            if (ImageSizePerAsset.ContainsKey(sign.PrefabName))
-            {
-                size = ImageSizePerAsset[sign.PrefabName];
-            }
-
-            // Combine all the values into the url;
-            string url = $"http://assets.imgix.net/~text?fm={format}&txtalign=middle,center&txtsize={fontsize}&txt={message}&w={size.ImageWidth}&h={size.ImageHeight}&txtclr={color}&bg={bgcolor}";
-            imageDownloader.QueueDownload(url, player, sign, false);
         }
 
         /// <summary>
@@ -1151,7 +1135,13 @@ namespace Oxide.Plugins
         /// <param name="args">Any amount of arguments to add to the message. </param>
         private void SendMessage(BasePlayer player, string key, params object[] args)
         {
-            player.ChatMessage(string.Format(GetTranslation(key, player), args));
+            if(player != null)
+            {
+                if(player.IsConnected)
+                {
+                    player.ChatMessage(string.Format(GetTranslation(key, player), args));
+                }
+            }
         }
 
         /// <summary>
@@ -1164,6 +1154,114 @@ namespace Oxide.Plugins
         {
             return lang.GetMessage(key, this, player?.UserIDString);
         }
+
+        // START INBOUND HOOKS
+        /// <summary>
+        /// API call for pasting text when the Signage entity is known.  Also requires player.
+        /// It doesn't check for cooldowns, permissions etc.
+        /// </summary>
+        /// <param name="player">Player to post for</param>
+        /// <param name="sign">Sign entity in question</param>
+        /// <param name="message">Text message to paste to the sign</param>
+        /// <param name="raw">whether the image should be downloaded as a raw file</param>
+        private void signText(BasePlayer player, Signage sign, string message, int fontsize=30, string color="FFFFFF", string bgcolor="000000")
+        {
+            //Puts($"signText called with {message}");
+            bool hor = IsSignHorizontal(sign);
+            string format = "png32";
+
+            ImageSize size = null;
+            if(ImageSizePerAsset.ContainsKey(sign.PrefabName))
+            {
+                size = ImageSizePerAsset[sign.PrefabName];
+            }
+
+            // Combine all the values into the url;
+            string url = $"http://assets.imgix.net/~text?fm={format}&txtalign=middle,center&txtsize={fontsize}&txt={message}&w={size.ImageWidth}&h={size.ImageHeight}&txtclr={color}&bg={bgcolor}";
+            imageDownloader.QueueDownload(url, player, sign, false, hor);
+            Interface.Oxide.CallHook("OnImagePost", player, url);
+        }
+
+        /// <summary>
+        /// API call for pasting text when the Signage entity is known.
+        /// It doesn't check for cooldowns, permissions etc.
+        /// </summary>
+        /// <param name="sign">Sign entity in question</param>
+        /// <param name="message">Text message to paste to the sign</param>
+        /// <param name="raw">whether the image should be downloaded as a raw file</param>
+        private void Silt(Signage sign, string message, int fontsize=30, string color="FFFFFF", string bgcolor="000000")
+        {
+            //just like in the SilCommand, check for flipping
+            bool hor = IsSignHorizontal(sign);
+            string format = "png32";
+
+            ImageSize size = null;
+            if(ImageSizePerAsset.ContainsKey(sign.PrefabName))
+            {
+                size = ImageSizePerAsset[sign.PrefabName];
+            }
+
+            // Combine all the values into the url;
+            string url = $"http://assets.imgix.net/~text?fm={format}&txtalign=middle,center&txtsize={fontsize}&txt={message}&w={size.ImageWidth}&h={size.ImageHeight}&txtclr={color}&bg={bgcolor}";
+            imageDownloader.QueueDownload(url, null, sign, false, hor);
+            Interface.Oxide.CallHook("OnImagePost", null, url);
+        }
+
+        /// <summary>
+        /// API call for plugin when the Signage entity is known.  Also requires player.
+        /// It doesn't check for cooldowns, permissions etc.
+        /// </summary>
+        /// <param name="player">Player to post for</param>
+        /// <param name="sign">Sign entity in question</param>
+        /// <param name="url">URL of the image</param>
+        /// <param name="raw">whether the image should be downloaded as a raw file</param>
+        private void signImage(BasePlayer player, Signage sign, string url, bool raw = false)
+        {
+            bool hor = IsSignHorizontal(sign);
+            ImageSize size = null;
+
+            imageDownloader.QueueDownload(url, player, sign, false);
+            Interface.Oxide.CallHook("OnImagePost", player, url);
+        }
+
+        /// <summary>
+        /// API call for plugin when the Signage entity is known but not the player.
+        /// It doesn't check for cooldowns, permissions etc.
+        /// </summary>
+        /// <param name="sign">Sign entity in question</param>
+        /// <param name="url">URL of the image</param>
+        /// <param name="raw">whether the image should be downloaded as a raw file</param>
+        private void Sil(Signage sign, string url, bool raw = false)
+        {
+            //just like in the SilCommand, check for flipping
+            bool hor = IsSignHorizontal(sign);
+
+            imageDownloader.QueueDownload(url, null, sign, raw, hor);
+            Interface.Oxide.CallHook("OnImagePost", null, url);
+        }
+
+        /// <summary>
+        /// API call for a plugin to determine the sign the player is looking at
+        /// </summary>
+        /// <param name="player">The player that is, presumably, looking at a sign</param>
+        /// <returns>Returns null if the player is not looking at a sign, otherwise the sign in question</returns>
+        private object GetSignLookedAt(BasePlayer player)
+        {
+            Signage sign;
+            if(!IsLookingAtSign(player, out sign)) return null;
+            else return sign;
+        }
+
+        /// <summary>
+        /// Checks if the sign is of a particular hanging type
+        /// </summary>
+        /// <param name="sign">The sign in question</param>
+        /// <returns>Returns true if the sign is horizontal (and thus, needs flipping)</returns>
+        private bool IsSignHorizontal(Signage sign)
+        {
+            return sign.LookupPrefab().name == "sign.hanging" ? true : false;
+        }
+        // END INBOUND HOOKS
     }
 
     namespace SignArtistClasses
