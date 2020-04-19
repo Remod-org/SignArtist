@@ -16,7 +16,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Sign Artist", "RFC1920", "1.1.9", ResourceId = 992)]
+    [Info("Sign Artist", "RFC1920", "1.2.0", ResourceId = 992)]
     [Description("Allows players with the appropriate permission to import images from the internet on paintable objects")]
 
     /*********************************************************************************
@@ -264,21 +264,26 @@ namespace Oxide.Plugins
             /// <param name="reduceCount"></param>
             private void StartNextDownload(bool reduceCount = false)
             {
-                // Check if we need to reduce the active downloads counter after a succesful or failed download.
+                // Check if we need to reduce the active downloads counter after a successful or failed download.
                 if (reduceCount)
                 {
                     activeDownloads--;
                 }
 
-                // Check if we don't have the maximum configured amount of downloads running already.
-                if (activeDownloads >= signArtist.Settings.MaxActiveDownloads)
-                {
-                    return;
-                }
-
                 // Check if there is still an image in the queue.
                 if (downloadQueue.Count <= 0)
                 {
+					activeDownloads = 0;
+					StopCoroutine(DownloadImage(null));
+                    return;
+                }
+
+                // Check if we don't have the maximum configured amount of downloads running already.
+                if (activeDownloads >= signArtist.Settings.MaxActiveDownloads)
+                {
+					activeDownloads = 0;
+					downloadQueue.Clear();
+					StopCoroutine(DownloadImage(null));
                     return;
                 }
 
@@ -293,7 +298,7 @@ namespace Oxide.Plugins
             /// <param name="reduceCount"></param>
             private void StartNextRestore(bool reduceCount = false)
             {
-                // Check if we need to reduce the active restores counter after a succesful or failed restore.
+                // Check if we need to reduce the active restores counter after a successful or failed restore.
                 if (reduceCount)
                 {
                     activeRestores--;
@@ -322,6 +327,7 @@ namespace Oxide.Plugins
             /// <param name="request">The requested <see cref="DownloadRequest"/> instance. </param>
             private IEnumerator DownloadImage(DownloadRequest request)
             {
+				if(request == null) yield break;
                 using (WWW www = new WWW(request.Url))
                 {
                     // Wait for the webrequest to complete
@@ -336,7 +342,7 @@ namespace Oxide.Plugins
                     // Verify that the webrequest was successful.
                     if (www.error != null)
                     {
-                        // The webrequest wasn't succesful, show a message to the player and attempt to start the next download.
+                        // The webrequest wasn't successful.  Show a message to the player and attempt to start the next download.
                         signArtist.SendMessage(request.Sender, "WebErrorOccurred", www.error);
                         StartNextDownload(true);
 
@@ -612,8 +618,8 @@ namespace Oxide.Plugins
                 ["DownloadQueued"] = "Your image was added to the download queue!",
                 ["RestoreQueued"] = "Your sign was added to the restore queue!",
                 ["RestoreBatchQueued"] = "You added all {0} signs to the restore queue!",
-                ["ImageLoaded"] = "The image was succesfully loaded to the sign!",
-                ["ImageRestored"] = "The image was succesfully restored for the sign!",
+                ["ImageLoaded"] = "The image was successfully loaded to the sign!",
+                ["ImageRestored"] = "The image was successfully restored for the sign!",
                 ["LogEntry"] = "Player `{0}` (SteamId: {1}) loaded {2} into {3} from {4}",
                 ["NoSignFound"] = "Unable to find a sign! Make sure you are looking at one and that you are not too far away from it.",
                 ["Cooldown"] = "You can't use the command yet! Remaining cooldown: {0}.",
@@ -1195,7 +1201,7 @@ namespace Oxide.Plugins
             bool hor = IsSignHorizontal(sign);
             string format = "png32";
 
-            ImageSize size = null;
+            ImageSize size = new ImageSize(0, 0);
             if(ImageSizePerAsset.ContainsKey(sign.PrefabName))
             {
                 size = ImageSizePerAsset[sign.PrefabName];
